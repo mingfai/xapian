@@ -14,7 +14,6 @@ XAPIAN_SWIG_CS_SRCS=\
 	generated-csharp/BM25PlusWeight.cs\
 	generated-csharp/BM25Weight.cs \
 	generated-csharp/BoolWeight.cs \
-	generated-csharp/Chert.cs \
 	generated-csharp/Compactor.cs \
 	generated-csharp/CoordWeight.cs \
 	generated-csharp/Database.cs \
@@ -99,9 +98,11 @@ $(ASSEMBLY).dll: $(XAPIAN_SWIG_CS_SRCS) AssemblyInfo.cs XapianSharp.snk
 	    `for f in $(XAPIAN_SWIG_CS_SRCS); do if test -f "$$f"; then echo $$f; else echo $(srcdir)/$$f ; fi ; done` \
 	    AssemblyInfo.cs
 
-BUILT_SOURCES = xapian_wrap.cc xapian_wrap.h $(XAPIAN_SWIG_CS_SRCS)
+SWIG_GENERATED = xapian_wrap.cc xapian_wrap.h $(XAPIAN_SWIG_CS_SRCS)
 
-EXTRA_DIST = csharp.i SmokeTest.cs docs/index.rst $(BUILT_SOURCES)
+BUILT_SOURCES = $(SWIG_GENERATED)
+
+EXTRA_DIST = csharp.i SmokeTest.cs docs/index.rst $(SWIG_GENERATED)
 
 lib_LTLIBRARIES = _XapianSharp.la
 
@@ -169,7 +170,7 @@ dist_exampledata_DATA =\
 	docs/examples/SimpleExpand.cs
 
 docdatadir = $(docdir)/csharp
-docdata_DATA = docs/index.html
+dist_docdata_DATA = docs/index.html
 
 if DOCUMENTATION_RULES
 BUILT_SOURCES += docs/index.html

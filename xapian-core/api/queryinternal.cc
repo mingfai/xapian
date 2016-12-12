@@ -80,7 +80,9 @@ namespace Internal {
 struct CmpMaxOrTerms {
     /** Return true if and only if a has a strictly greater termweight than b. */
     bool operator()(const PostList *a, const PostList *b) {
-#if (defined(__i386__) && !defined(__SSE2_MATH__)) || defined(__mc68000__) || defined(__mc68010__) || defined(__mc68020__) || defined(__mc68030__)
+#if (defined(__i386__) && !defined(__SSE_MATH__)) || \
+    defined(__mc68000__) || defined(__mc68010__) || \
+    defined(__mc68020__) || defined(__mc68030__)
 	// On some architectures, most common of which is x86, floating point
 	// values are calculated and stored in registers with excess precision.
 	// If the two get_maxweight() calls below return identical values in a
@@ -1215,19 +1217,17 @@ QueryBranch::do_synonym(QueryOptimiser * qopt, double factor) const
 {
     LOGCALL(MATCH, PostList *, "QueryBranch::do_synonym", qopt | factor);
     OrContext ctx(subqueries.size());
-    bool old_in_synonym;
-    if (factor != 0.0) {
-	old_in_synonym = qopt->in_synonym;
-	qopt->in_synonym = true;
-    }
-    do_or_like(ctx, qopt, 0.0);
-    PostList * pl = ctx.postlist(qopt);
     if (factor == 0.0) {
 	// If we have a factor of 0, we don't care about the weights, so
 	// we're just like a normal OR query.
-	return pl;
+	do_or_like(ctx, qopt, 0.0);
+	return ctx.postlist(qopt);
     }
 
+    bool old_in_synonym = qopt->in_synonym;
+    qopt->in_synonym = true;
+    do_or_like(ctx, qopt, 0.0);
+    PostList * pl = ctx.postlist(qopt);
     qopt->in_synonym = old_in_synonym;
 
     // We currently assume wqf is 1 for calculating the synonym's weight

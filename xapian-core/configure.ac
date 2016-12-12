@@ -97,7 +97,10 @@ dnl make up the library twice on most platforms.  Shared libraries are the
 dnl better option for most users, and if anyone really wants static libraries,
 dnl they can configure with --enable-static (or --enable-static=xapian-core if
 dnl configuring a combined tree with the bindings).
-LT_INIT([disable-static])
+dnl
+dnl We don't export any data items from the library, so it should be safe to
+dnl enable win32-dll without decorating any declarations specially.
+LT_INIT([disable-static win32-dll])
 
 dnl -no-undefined causes problems on Solaris with Sun CC in C++11 mode, so only
 dnl pass -no-undefined on platforms where it is required in order to link a
@@ -435,12 +438,9 @@ dnl currently (v3.20) provide _putenv_s(), so we can't just use it conditional
 dnl on __WIN32__ being defined.
 AC_CHECK_FUNCS([setenv _putenv_s])
 
-dnl Check for a more efficient way of closing fds during daemonisation.
-dnl Apparently closefrom() is available on at least "Solaris 9 or later, NetBSD
-dnl 3.0 or later, OpenBSD 3.5 or later".  If we don't have closefrom(), then
-dnl dirfd() and getrlimit are useful for an efficient implementation on some
-dnl platforms.
-AC_CHECK_FUNCS([closefrom dirfd getrlimit])
+dnl See if we have closefrom(), or some functions that are useful to implement
+dnl closefrom() on platforms which don't provide it.
+AC_CHECK_FUNCS([closefrom getdirentries getrlimit])
 
 dnl See if ftime returns void (as it does on mingw)
 AC_MSG_CHECKING([return type of ftime])
@@ -605,7 +605,7 @@ if test -n "${VALGRIND-unset}" ; then
       else
 	AC_MSG_RESULT([yes])
 	AC_CHECK_HEADERS([valgrind/memcheck.h], [], [VALGRIND=], [ ])
-      fi	
+      fi
     else
       dnl The valgrind detected doesn't seem to work!  Perhaps this is an
       dnl x86_64 box with a 32 bit valgrind.
@@ -737,15 +737,15 @@ AC_DEFUN([XAPIAN_BACKEND_ENABLE],
   ])
 
 dnl When adding a new backend, update INSTALL too.
-XAPIAN_BACKEND_ENABLE([chert])
 XAPIAN_BACKEND_ENABLE([glass])
 XAPIAN_BACKEND_ENABLE([inmemory])
 XAPIAN_BACKEND_ENABLE([remote])
 
+use_proc_for_uuid=0
 use_win32_uuid_api=0
-case $enable_backend_chert$enable_backend_glass in
+case $enable_backend_glass in
 *yes*)
-  dnl We use zlib for compressing tags in chert/glass.  We could
+  dnl We use zlib for compressing tags in glass.  We could
   dnl automatically disable support if zlib isn't found, but overall that
   dnl probably does more harm than good - it's most likely that someone just
   dnl forgot to install the -dev package for zlib.
@@ -754,14 +754,14 @@ case $enable_backend_chert$enable_backend_glass in
 
   dnl Check for zlib.h.
   AC_CHECK_HEADERS([zlib.h], [], [
-    AC_MSG_ERROR([zlib.h not found - required for chert and glass (you may need to install the zlib1g-dev or zlib-devel package)])
+    AC_MSG_ERROR([zlib.h not found - required for glass (you may need to install the zlib1g-dev or zlib-devel package)])
     ], [ ])
 
   dnl Check for zlibVersion in -lz.
   SAVE_LIBS=$LIBS
   dnl mingw build needs -lzlib or -lzdll.
   AC_SEARCH_LIBS([zlibVersion], [z zlib zdll], [], [
-    AC_MSG_ERROR([zlibVersion() not found in -lz, -lzlib, or -lzdll - required for chert and glass (you may need to install the zlib1g-dev or zlib-devel package)])
+    AC_MSG_ERROR([zlibVersion() not found in -lz, -lzlib, or -lzdll - required for glass (you may need to install the zlib1g-dev or zlib-devel package)])
     ])
   if test x != x"$LIBS" ; then
     XAPIAN_LIBS="$XAPIAN_LIBS $LIBS"
@@ -782,7 +782,7 @@ case $enable_backend_chert$enable_backend_glass in
 	dnl -luuid.
 	SAVE_LIBS=$LIBS
 	AC_SEARCH_LIBS([uuid_generate], [uuid], [], [
-	  AC_MSG_ERROR([uuid_generate() not found in -luuid - required for chert and glass (you may need to install the uuid-dev, libuuid-devel or e2fsprogs-devel package)])
+	  AC_MSG_ERROR([uuid_generate() not found in -luuid - required for glass (you may need to install the uuid-dev, libuuid-devel or e2fsprogs-devel package)])
 	  ])
 	if test x != x"$LIBS" ; then
 	  XAPIAN_LIBS="$XAPIAN_LIBS $LIBS"
@@ -795,7 +795,20 @@ case $enable_backend_chert$enable_backend_glass in
 	    AC_MSG_ERROR([uuid.h found, but uuid_create() not found.  You probably wants to install libuuid from util-linux-ng or e2fsprogs (you may need to install the uuid-dev, libuuid-devel or e2fsprogs-devel package)])
 	  ])
 	], [
-	  AC_MSG_ERROR([Neither uuid/uuid.h nor uuid.h found - required for chert and glass (you may need to install the uuid-dev, libuuid-devel or e2fsprogs-devel package)])
+	  dnl Especially useful for Android.
+	  AC_MSG_CHECKING([if host platform supports /proc/sys/kernel/random/uuid])
+	  case $host_os in
+	    linux*)
+	      use_proc_for_uuid=1
+	      AC_DEFINE([USE_PROC_FOR_UUID], [1],
+			[Define to 1 to read UUID from '/proc/sys/kernel/random/uuid'])
+	      AC_MSG_RESULT([yes])
+	      ;;
+	    *)
+	      AC_MSG_RESULT([no])
+	      AC_MSG_ERROR([Failed to find a way to generate UUIDs, required for glass backends (you may need to install the uuid-dev, libuuid-devel or e2fsprogs-devel package)])
+	      ;;
+	  esac
 	], [ ])
       ], [ ])
       ;;
@@ -811,6 +824,7 @@ case $enable_backend_chert$enable_backend_glass in
   LIBS=$SAVE_LIBS
   ;;
 esac
+AM_CONDITIONAL([USE_PROC_FOR_UUID], [test "$use_proc_for_uuid" = 1])
 AM_CONDITIONAL([USE_WIN32_UUID_API], [test "$use_win32_uuid_api" = 1])
 
 REMOTE_LIBS=
@@ -899,12 +913,11 @@ dnl Turn off compilation of anything that we don't have the requirements for
 
 dnl Set conditionals to specify what we compile
 
-AM_CONDITIONAL([BUILD_BACKEND_CHERT], [test yes = "$enable_backend_chert"])
 AM_CONDITIONAL([BUILD_BACKEND_GLASS], [test yes = "$enable_backend_glass"])
 AM_CONDITIONAL([BUILD_BACKEND_INMEMORY], [test yes = "$enable_backend_inmemory"])
 AM_CONDITIONAL([BUILD_BACKEND_REMOTE], [test yes = "$enable_backend_remote"])
-AM_CONDITIONAL([BUILD_BACKEND_CHERT_OR_GLASS],
-  [test nono != "$enable_backend_chert$enable_backend_glass"])
+AM_CONDITIONAL([BUILD_BACKEND_TOOLS],
+  [test no != "$enable_backend_glass"])
 
 dnl Used to decide if we should use the zlib-vg.so LD_PRELOAD hack.
 use_zlib_vg=no
@@ -1216,7 +1229,8 @@ case $host_cpu in
 	  [AC_MSG_RESULT([yes (configure with --disable-sse to disable)])
 	  AM_CXXFLAGS="$AM_CXXFLAGS -xarch=$enable_sse"]
 	  ,
-	  [AC_MSG_RESULT([don't know how to for compiler $CXX])]
+	  [AC_MSG_RESULT([don't know how to for compiler $CXX])
+	  FP_EXCESS_PRECISION=yes]
 	)
       fi
     fi
@@ -1341,7 +1355,7 @@ dnl Generate include/xapian/version.h:
 dnl MAIN_VERSION is VERSION without any _git123 suffix.
 MAIN_VERSION="$MAJOR_VERSION.$MINOR_VERSION.$REVISION"
 cxxcpp_flags=-I.
-for backend in CHERT GLASS INMEMORY REMOTE ; do
+for backend in GLASS INMEMORY REMOTE ; do
   val=`eval echo "\\\$BUILD_BACKEND_${backend}_TRUE"`
   if test -z "$val" ; then
     cxxcpp_flags="$cxxcpp_flags -DXAPIAN_HAS_${backend}_BACKEND"

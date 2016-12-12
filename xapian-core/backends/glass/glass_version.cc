@@ -385,14 +385,13 @@ static const uint4 compress_min_tab[] = {
 };
 
 void
-GlassVersion::create(unsigned blocksize, int flags)
+GlassVersion::create(unsigned blocksize)
 {
     AssertRel(blocksize,>=,2048);
     uuid_generate(uuid);
     for (unsigned table_no = 0; table_no < Glass::MAX_; ++table_no) {
 	root[table_no].init(blocksize, compress_min_tab[table_no]);
     }
-    sync(write(rev, flags), rev, flags);
 }
 
 namespace Glass {
@@ -405,7 +404,7 @@ RootInfo::init(unsigned blocksize_, uint4 compress_min_)
     level = 0;
     num_entries = 0;
     root_is_fake = true;
-    sequential_mode = true;
+    sequential = true;
     blocksize = blocksize_;
     compress_min = compress_min_;
     fl_serialised.resize(0);
@@ -416,7 +415,7 @@ RootInfo::serialise(string &s) const
 {
     pack_uint(s, root);
     unsigned val = level << 2;
-    if (sequential_mode) val |= 0x02;
+    if (sequential) val |= 0x02;
     if (root_is_fake) val |= 0x01;
     pack_uint(s, val);
     pack_uint(s, num_entries);
@@ -436,7 +435,7 @@ RootInfo::unserialise(const char ** p, const char * end)
 	!unpack_uint(p, end, &compress_min) ||
 	!unpack_string(p, end, fl_serialised)) return false;
     level = val >> 2;
-    sequential_mode = val & 0x02;
+    sequential = val & 0x02;
     root_is_fake = val & 0x01;
     blocksize <<= 11;
     AssertRel(blocksize,>=,2048);

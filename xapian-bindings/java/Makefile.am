@@ -29,7 +29,6 @@ XAPIAN_SWIG_JAVA_SRCS=\
 	org/xapian/BM25PlusWeight.java\
 	org/xapian/BM25Weight.java\
 	org/xapian/BoolWeight.java\
-	org/xapian/Chert.java\
 	org/xapian/Compactor.java\
 	org/xapian/CoordWeight.java\
 	org/xapian/Database.java\
@@ -156,9 +155,11 @@ libxapian_jni_la_LDFLAGS = -avoid-version -module $(SHREXT) $(NO_UNDEFINED)
 libxapian_jni_la_LIBADD = $(XAPIAN_LIBS)
 libxapian_jni_la_SOURCES = xapian_wrap.cc
 
-BUILT_SOURCES = xapian_wrap.cc xapian_wrap.h $(XAPIAN_SWIG_JAVA_SRCS)
+SWIG_GENERATED = xapian_wrap.cc xapian_wrap.h $(XAPIAN_SWIG_JAVA_SRCS)
 
-EXTRA_DIST = run-java-test SmokeTest.java docs/index.rst $(BUILT_SOURCES)
+BUILT_SOURCES = $(SWIG_GENERATED)
+
+EXTRA_DIST = run-java-test SmokeTest.java docs/index.rst $(SWIG_GENERATED)
 
 if MAINTAINER_MODE
 stamp = xapian_wrap.stamp
@@ -195,7 +196,7 @@ dist_exampledata_DATA =\
 	docs/examples/SimpleIndex.java
 
 docdatadir = $(docdir)/java
-docdata_DATA = docs/index.html
+dist_docdata_DATA = docs/index.html
 
 if DOCUMENTATION_RULES
 BUILT_SOURCES += docs/index.html
